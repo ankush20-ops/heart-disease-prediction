@@ -12,12 +12,14 @@ import os
 from xgboost import XGBClassifier
 
 # ========================== Project Paths ==========================
-PROJECT_PATH = "C:/Users/jaiba/Downloads/AI_Healthcare_Project"
-MODEL_PATH = os.path.join(PROJECT_PATH, "xgboost_heart_disease.pkl")
+import os
+MODEL_PATH = "./xgboost_heart_disease.pkl"
 
-# ========================== Load Model ==========================
-with open(MODEL_PATH, "rb") as file:
-    model = pickle.load(file)
+if not os.path.exists(MODEL_PATH):
+    st.error("❗ Model file not found. Please ensure the model file is uploaded correctly.")
+else:
+    with open(MODEL_PATH, "rb") as file:
+        model = pickle.load(file)
 
 # ========================== Data Formatting ==========================
 expected_features = [
