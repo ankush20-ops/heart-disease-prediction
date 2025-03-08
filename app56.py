@@ -10,8 +10,11 @@ import fitz  # PyMuPDF for PDF reading
 import os  # For path handling
 
 # Ensure paths are correct
-PROJECT_PATH = "C:/Users/jaiba/Downloads/AI_Healthcare_Project"
-MODEL_PATH = os.path.join(PROJECT_PATH, "xgboost_heart_disease.pkl")
+import os
+import pickle
+
+# Correct path for Streamlit Cloud
+MODEL_PATH = "xgboost_heart_disease.pkl"
 
 # Load Model
 with open(MODEL_PATH, "rb") as file:
