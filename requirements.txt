@@ -10,3 +10,4 @@ pillow
 fpdf
 pymupdf
 PyPDF2
+seaborn
