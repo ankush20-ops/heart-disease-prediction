@@ -19,15 +19,32 @@ with open(MODEL_PATH, "rb") as file:
     model = pickle.load(file)
 
 # ------------------------ DYNAMIC BANNER IMAGE ------------------------
+# ------------------------ DYNAMIC BANNER IMAGE ------------------------
 def create_heart_banner():
     plt.figure(figsize=(10, 2))
     sns.heatmap(np.random.rand(10, 20), cmap='Reds', cbar=False)
     plt.title("❤️ Heart Disease Prediction System", fontsize=18, fontweight='bold')
     plt.axis('off')
-    plt.savefig('heart_banner.png', bbox_inches='tight', dpi=300)
+    plt.savefig('heart_banner.png', bbox_inches='tight', dpi=300, format='png')
     plt.close()
 
 create_heart_banner()
+
+# ------------------------ STREAMLIT UI ------------------------
+def main():
+    st.set_page_config(page_title="Heart Disease Prediction System", layout="wide")
+
+    # Display the dynamically generated banner
+    try:
+        st.image("heart_banner.png", use_container_width=True)
+    except Exception as e:
+        st.warning(f"⚠️ Banner image could not be loaded: {e}")
+        st.markdown("### ❤️ Heart Disease Prediction System")
+
+    st.title("💓 AI-Powered Heart Disease Prediction System")
+    st.markdown("---")
+
+    # Rest of the code remains the same
 
 # ------------------------ EXPECTED FEATURE ORDER ------------------------
 expected_features = [
