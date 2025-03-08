@@ -1,114 +1,84 @@
 import streamlit as st
-import pickle
 import pandas as pd
 import numpy as np
+import pickle
 import shap
 import matplotlib.pyplot as plt
-from fpdf import FPDF
+import plotly.express as px
 from PyPDF2 import PdfReader
+from fpdf import FPDF
 from io import BytesIO
-import base64
 import os
+from xgboost import XGBClassifier
 
-# Project Paths
-MODEL_PATH = "xgboost_heart_disease.pkl"
+# ========================== Project Paths ==========================
+PROJECT_PATH = "C:/Users/jaiba/Downloads/AI_Healthcare_Project"
+MODEL_PATH = os.path.join(PROJECT_PATH, "xgboost_heart_disease.pkl")
 
-# Load Model
+# ========================== Load Model ==========================
 with open(MODEL_PATH, "rb") as file:
     model = pickle.load(file)
 
-# =========================== PAGE DESIGN & HEADER ===========================
-st.set_page_config(page_title="Heart Disease Prediction", page_icon="❤️", layout="wide")
+# ========================== Data Formatting ==========================
+expected_features = [
+    "Age", "Sex", "Chest Pain Type", "Resting BP", "Cholesterol",
+    "Fasting Blood Sugar", "Resting ECG", "Max Heart Rate", 
+    "Exercise Angina", "ST Depression", "Slope", "Major Vessels", "Thal"
+]
 
-# Banner Image - Generated via Python
-def generate_banner():
-    plt.figure(figsize=(10, 2))
-    plt.text(0.5, 0.5, "Heart Disease Prediction System", fontsize=28, ha='center', va='center', color='red')
-    plt.axis('off')
-    plt.savefig("heart_banner.png", bbox_inches='tight')
-    st.image("heart_banner.png", use_container_width=True)
+def clean_and_format_input(data):
+    df = pd.DataFrame([data], columns=expected_features)
+    df = df.astype(float)
+    return df.values
 
-generate_banner()
-
-st.markdown("<h2 style='text-align: center;'>🫀 Enter Your Health Details Below 🫀</h2>", unsafe_allow_html=True)
-
-# =========================== INPUT FORM ===========================
-with st.form("patient_form"):
-    age = st.number_input("Age", min_value=1, max_value=120, value=50)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    height = st.number_input("Height (cm)", min_value=50, max_value=250, value=165)
-    weight = st.number_input("Weight (kg)", min_value=20, max_value=200, value=70)
-    systolic_bp = st.number_input("Systolic Blood Pressure", value=120)
-    diastolic_bp = st.number_input("Diastolic Blood Pressure", value=80)
-    cholesterol = st.selectbox("Cholesterol Level", ["Normal", "Above Normal", "Well Above Normal"])
-    glucose = st.selectbox("Glucose Level", ["Normal", "Above Normal", "Well Above Normal"])
-    smoker = st.radio("Smoker?", ["No", "Yes"])
-    alcohol = st.radio("Alcohol Intake?", ["No", "Yes"])
-    physical_activity = st.radio("Physical Activity?", ["No", "Yes"])
-
-    submitted = st.form_submit_button("🔍 Predict")
-
-# =========================== DATA PROCESSING ===========================
-def preprocess_input():
-    return np.array([[age, 1 if gender == "Male" else 0, height, weight, 
-                      systolic_bp, diastolic_bp, cholesterol, glucose, 
-                      1 if smoker == "Yes" else 0, 
-                      1 if alcohol == "Yes" else 0, 
-                      1 if physical_activity == "Yes" else 0]])
-
-# =========================== PREDICTION LOGIC ===========================
+# ========================== Prediction Function ==========================
 def predict_heart_disease(data):
+    data = clean_and_format_input(data)
     prediction = model.predict(data)[0]
     return prediction
 
-# =========================== HEART DISEASE TYPES & RECOMMENDATIONS ===========================
-def identify_disease():
-    return np.random.choice([
-        "Coronary Artery Disease",
-        "Heart Attack",
-        "Arrhythmia",
-        "Heart Valve Disease",
-        "Heart Failure"
-    ])
+# ========================== Heart Disease Types ==========================
+disease_types = {
+    1: "Coronary Artery Disease",
+    2: "Cardiomyopathy",
+    3: "Heart Valve Disease",
+    4: "Arrhythmia"
+}
 
-def health_recommendations(prediction):
+def get_disease_type():
+    return np.random.choice(list(disease_types.values()))
+
+# ========================== Suggestions ==========================
+def provide_suggestions(prediction):
     if prediction == 1:
-        heart_condition = identify_disease()
-        st.error(f"🚨 **Heart Disease Detected:** {heart_condition}")
-        st.warning("""
-        🩺 **Health Recommendations for Diagnosed Patients:**  
-        - Follow a heart-healthy diet (low in salt, sugar, and saturated fats).  
-        - Engage in regular, moderate exercise like walking or yoga.  
-        - Regularly monitor your blood pressure and cholesterol levels.  
-        - Consider stress management techniques such as meditation.  
-        - Avoid smoking and reduce alcohol intake.  
-        """)
+        return (
+            "🩺 **Medical Advice:** Consult a cardiologist promptly for diagnosis and management.\n"
+            "🥗 **Dietary Advice:** Follow a heart-healthy diet, reduce saturated fats and sodium.\n"
+            "🚶 **Lifestyle Tip:** Regular exercise, stress management, and quitting smoking are vital.\n"
+            "💊 **Medication:** Follow prescribed medications and routine checkups."
+        )
     else:
-        st.success("✅ **No Heart Disease Detected. Stay Healthy!**")
-        st.info("""
-        🌟 **Health Tips to Prevent Heart Disease:**  
-        - Maintain a balanced diet with plenty of fruits and vegetables.  
-        - Engage in daily physical activities for at least 30 minutes.  
-        - Limit processed foods and sugary drinks.  
-        - Stay hydrated and prioritize mental well-being.  
-        """)
+        return (
+            "💪 **Stay Healthy:** Maintain a balanced diet with plenty of vegetables, fruits, and whole grains.\n"
+            "🏃 **Active Living:** Engage in daily physical activities to keep your heart strong.\n"
+            "🥤 **Healthy Habits:** Minimize alcohol intake and avoid smoking for long-term heart health."
+        )
 
-# =========================== EXPLAINABILITY WITH SHAP ===========================
+# ========================== SHAP Explainability ==========================
 def explain_prediction(data):
     explainer = shap.Explainer(model)
     shap_values = explainer(data)
-    
-    st.subheader("📊 Prediction Explanation")
-    fig, ax = plt.subplots(figsize=(8, 5))
+
+    st.subheader("🔍 Feature Impact Analysis")
+    fig, ax = plt.subplots()
     shap.waterfall_plot(shap_values[0], ax=ax)
     st.pyplot(fig)
 
-# =========================== PDF REPORT GENERATION ===========================
-class PDF(FPDF):
+# ========================== PDF Report Generation ==========================
+class PDFReport(FPDF):
     def header(self):
-        self.set_font('Arial', 'B', 20)
-        self.cell(0, 10, '🫀 Heart Disease Prediction Report 🫀', ln=True, align='C')
-        self.ln(10)
+        self.set_font('Arial', 'B', 16)
+        self.cell(0, 10, 'Heart Disease Prediction Report', ln=True, align='C')
 
     def chapter_title(self, title):
         self.set_font('Arial', 'B', 14)
@@ -120,56 +90,94 @@ class PDF(FPDF):
         self.multi_cell(0, 10, body)
         self.ln()
 
-def generate_pdf_report(prediction):
-    pdf = PDF()
+def generate_report(prediction, suggestions):
+    pdf = PDFReport()
     pdf.add_page()
-    
-    pdf.chapter_title("Prediction Results")
-    result_text = "Heart Disease Detected!" if prediction == 1 else "No Heart Disease Found."
-    pdf.chapter_body(result_text)
-    
-    pdf.chapter_title("Health Recommendations")
+
+    pdf.chapter_title("Prediction Result")
+    pdf.chapter_body(f"Prediction Outcome: {'Heart Disease Detected' if prediction == 1 else 'No Heart Disease Detected'}")
+
     if prediction == 1:
-        pdf.chapter_body("Follow a heart-healthy diet, regular exercise, and medication as prescribed.")
-    else:
-        pdf.chapter_body("Maintain a balanced diet, regular exercise, and routine checkups.")
+        pdf.chapter_body(f"Possible Disease Type: {get_disease_type()}")
 
-    pdf_output = "Prediction_Report.pdf"
-    pdf.output(pdf_output)
-    
-    with open(pdf_output, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-        href = f'<a href="data:application/pdf;base64,{b64}" download="{pdf_output}">📥 Download Prediction Report (PDF)</a>'
-        st.markdown(href, unsafe_allow_html=True)
+    pdf.chapter_title("Health Suggestions")
+    pdf.chapter_body(suggestions)
 
-# =========================== PDF DATA UPLOAD FEATURE ===========================
-def extract_pdf_data(uploaded_file):
-    try:
-        reader = PdfReader(uploaded_file)
-        text = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
-        st.text_area("📄 Extracted Data from PDF", text, height=200)
-        # Sample logic to process text (convert to numerical data if structured)
-        return preprocess_input()
-    except Exception as e:
-        st.error("❌ Error reading PDF. Please ensure the document contains readable text.")
-        return None
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
 
-# =========================== MAIN FUNCTIONALITY ===========================
+# ========================== PDF Data Extraction ==========================
+def extract_pdf_data(pdf_file):
+    reader = PdfReader(pdf_file)
+    text = ''.join(page.extract_text() for page in reader.pages)
+    extracted_values = [float(val) for val in text.split() if val.replace('.', '', 1).isdigit()]
+    return extracted_values
+
+# ========================== UI Design ==========================
+st.markdown("<h1 style='text-align: center;'>🫀 Heart Disease Prediction System</h1>", unsafe_allow_html=True)
+
+# Python-generated banner image
+fig = plt.figure(figsize=(5, 2))
+plt.text(0.5, 0.5, "Heart Health Matters ❤️", fontsize=20, ha='center', va='center')
+plt.axis('off')
+st.pyplot(fig)
+
+# Sidebar with detailed instructions
+with st.sidebar:
+    st.markdown("## 📝 Instructions")
+    st.markdown("1️⃣ Enter your health details or upload a PDF with patient data.\n"
+                "2️⃣ Click **Predict** to get your result.\n"
+                "3️⃣ Download your PDF report for detailed insights.\n"
+                "4️⃣ Stay proactive with the provided health tips. 🩺")
+
+# ========================== User Input Form ==========================
+with st.form("user_input_form"):
+    st.subheader("🧑‍⚕️ Enter Patient Details")
+    age = st.number_input("Age", min_value=1, max_value=120)
+    sex = st.selectbox("Sex", ["Male", "Female"])
+    chest_pain = st.number_input("Chest Pain Type (1-4)", min_value=1, max_value=4)
+    bp = st.number_input("Resting BP", min_value=80, max_value=200)
+    cholesterol = st.number_input("Cholesterol Level", min_value=100, max_value=400)
+    fbs = st.selectbox("Fasting Blood Sugar", ["Yes", "No"])
+    ecg = st.number_input("Resting ECG (0-2)", min_value=0, max_value=2)
+    max_hr = st.number_input("Max Heart Rate", min_value=60, max_value=220)
+    exercise_angina = st.selectbox("Exercise Angina", ["Yes", "No"])
+    st_depression = st.number_input("ST Depression", min_value=0.0, max_value=10.0, step=0.1)
+    slope = st.number_input("Slope (1-3)", min_value=1, max_value=3)
+    vessels = st.number_input("Major Vessels (0-4)", min_value=0, max_value=4)
+    thal = st.number_input("Thal (1-3)", min_value=1, max_value=3)
+
+    submitted = st.form_submit_button("🚨 Predict")
+
+# ========================== Prediction Logic ==========================
 if submitted:
-    input_data = preprocess_input()
+    input_data = [age, 1 if sex == "Male" else 0, chest_pain, bp, cholesterol,
+                  1 if fbs == "Yes" else 0, ecg, max_hr, 
+                  1 if exercise_angina == "Yes" else 0, st_depression, slope, vessels, thal]
+    
     prediction = predict_heart_disease(input_data)
-    health_recommendations(prediction)
-    explain_prediction(input_data)
-    generate_pdf_report(prediction)
+    suggestions = provide_suggestions(prediction)
+    
+    st.success(f"**Prediction Outcome:** {'Heart Disease Detected' if prediction == 1 else 'No Heart Disease Detected'}")
+    
+    if prediction == 1:
+        st.warning(f"**Possible Disease Type:** {get_disease_type()}")
 
-st.markdown("---")
-st.markdown("📄 **Upload Patient Data in PDF Format**")
-uploaded_file = st.file_uploader("Upload PDF", type=['pdf'])
+    st.markdown("### 💡 Health Recommendations")
+    st.write(suggestions)
 
-if uploaded_file:
-    extracted_data = extract_pdf_data(uploaded_file)
-    if extracted_data is not None:
-        prediction = predict_heart_disease(extracted_data)
-        health_recommendations(prediction)
-        explain_prediction(extracted_data)
-        generate_pdf_report(prediction)
+    # Generate and download PDF report
+    pdf_buffer = generate_report(prediction, suggestions)
+    st.download_button("📄 Download Report", pdf_buffer, "Heart_Disease_Report.pdf")
+
+# ========================== PDF Upload Feature ==========================
+pdf_file = st.file_uploader("📂 Upload PDF with Patient Data", type="pdf")
+if pdf_file:
+    pdf_data = extract_pdf_data(pdf_file)
+    prediction = predict_heart_disease(pdf_data)
+    suggestions = provide_suggestions(prediction)
+    st.success(f"**Prediction Outcome:** {'Heart Disease Detected' if prediction == 1 else 'No Heart Disease Detected'}")
+    st.markdown("### 💡 Health Recommendations")
+    st.write(suggestions)
