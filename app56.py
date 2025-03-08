@@ -58,12 +58,29 @@ def predict_heart_disease(features):
     return prediction
 
 # SHAP Explanation
-def explain_prediction(features):
-    explainer = shap.Explainer(model)
-    shap_values = explainer(np.array([features]))
+import shap
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load SHAP explainer
+explainer = shap.TreeExplainer(model)  # Correct explainer for XGBoost models
+
+def explain_prediction(patient_data):
+    # Ensure input is in the correct format
+    sample_input = np.array([patient_data]).astype(float)
     
+    # Generate SHAP values
+    shap_values = explainer.shap_values(sample_input)
+
+    # Plot SHAP Waterfall Plot
+    st.subheader("🔍 Feature Importance Analysis")
     fig, ax = plt.subplots()
-    shap.waterfall_plot(shap_values[0], ax=ax)
+    
+    # Use `shap.Explanation` wrapper for newer SHAP versions
+    shap.waterfall_plot(shap.Explanation(values=shap_values[0], 
+                                         base_values=explainer.expected_value, 
+                                         data=sample_input[0]), ax=ax)
+    
     st.pyplot(fig)
 
 # PDF Report Generation
