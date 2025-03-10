@@ -6,7 +6,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import shap
 import plotly.express as px
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+
+# --- Generate Dynamic Banner Image ---
+def generate_banner():
+    img = Image.new("RGB", (900, 200), "#d62828")
+    draw = ImageDraw.Draw(img)
+    draw.text((50, 70), "🫀 Heart Disease Prediction System", fill="white", 
+              font=None, align="center")
+    img.save("dynamic_banner.png")
+
+generate_banner()
 
 # Fix model path for Streamlit Cloud
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "xgboost_heart_disease.pkl")
@@ -22,20 +32,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom styling
+# Custom Styling for a Sleek UI
 st.markdown("""
     <style>
-        .stApp { background-color: #f5f5f5; }
-        h1 { color: #d62828; text-align: center; }
-        .stButton>button { background-color: #d62828; color: white; font-size: 18px; }
+        .stApp { background-color: #f0f2f6; }
+        h1 { color: #d62828; text-align: center; font-weight: bold; }
+        .stButton>button { background-color: #d62828; color: white; font-size: 18px; border-radius: 10px; }
         .stAlert { font-size: 18px; }
+        .suggestion-box { background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 5px solid #ffc107; }
+        .success-box { background-color: #d4edda; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; }
+        .error-box { background-color: #f8d7da; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; }
     </style>
     """, unsafe_allow_html=True)
 
-# Display heart health banner image
-IMAGE_PATH = os.path.join(os.path.dirname(__file__), "heart_banner.jpg")
-if os.path.exists(IMAGE_PATH):
-    st.image(IMAGE_PATH, use_container_width=True)
+# Display Heart Health Banner
+st.image("dynamic_banner.png", use_container_width=True)
 
 # Title
 st.markdown("<h1>🫀 Heart Disease Prediction</h1>", unsafe_allow_html=True)
@@ -57,32 +68,32 @@ physical_activity = st.sidebar.selectbox("Physical Activity?", [("No", 0), ("Yes
 # Convert input to NumPy array
 user_input = np.array([[age, gender, height, weight, systolic_bp, diastolic_bp, cholesterol, glucose, smoker, alcohol, physical_activity]])
 
-# Predict
+# Prediction Logic
 if st.sidebar.button("🔍 Predict"):
-    prediction = model.predict(user_input)[0]  # 0 = No disease, 1 = Disease
-    
-    # Display result
+    prediction = model.predict(user_input)[0]
+
+    # Display Result
     if prediction == 1:
         st.error("🚨 **High Risk of Heart Disease!**")
-        st.markdown("### 🏥 Suggested Actions:")
-        st.markdown("""
-        - 🩺 **Consult a cardiologist immediately.**
-        - 🥗 **Follow a heart-healthy diet** (more veggies, less salt & sugar).
-        - 🚶 **Increase physical activity** (30 mins daily).
-        - 💊 **Monitor and manage cholesterol & blood pressure.**
-        - 🚭 **Quit smoking & reduce alcohol intake.**
-        - 😴 **Get enough sleep & manage stress.**
-        """)
+        st.markdown("""<div class='error-box'>
+            <h4>🏥 Suggested Actions:</h4>
+            - 🩺 **Consult a cardiologist immediately.**<br>
+            - 🥗 **Adopt a heart-healthy diet** (less salt, sugar & saturated fats).<br>
+            - 🚶 **Increase physical activity** (e.g., 30 mins of walking daily).<br>
+            - 💊 **Monitor and manage cholesterol & blood pressure.**<br>
+            - 🚭 **Quit smoking & limit alcohol intake.**<br>
+            - 😴 **Ensure proper rest & stress management.**
+        </div>""", unsafe_allow_html=True)
     else:
         st.success("✅ **No Heart Disease Detected!**")
-        st.markdown("### 💪 Keep Your Heart Healthy:")
-        st.markdown("""
-        - 🥦 **Maintain a balanced diet** (fruits, vegetables, whole grains).
-        - 🏃 **Exercise regularly** (150 mins per week).
-        - ❤️ **Monitor your heart health with regular check-ups.**
-        - 🚭 **Avoid smoking & excessive alcohol.**
-        - 😃 **Manage stress effectively.**
-        """)
+        st.markdown("""<div class='success-box'>
+            <h4>💪 Keep Your Heart Healthy:</h4>
+            - 🥦 **Maintain a balanced diet** with plenty of fruits and vegetables.<br>
+            - 🏃 **Exercise regularly** for at least 150 minutes per week.<br>
+            - ❤️ **Get regular check-ups** to monitor heart health.<br>
+            - 🚭 **Avoid smoking & reduce alcohol intake.**<br>
+            - 😃 **Practice stress-relief techniques like meditation.**
+        </div>""", unsafe_allow_html=True)
 
     # SHAP Explanation
     explainer = shap.Explainer(model)
@@ -100,7 +111,11 @@ if st.sidebar.button("🔍 Predict"):
     feature_df = pd.DataFrame({"Feature": feature_names, "Impact": shap_values_array})
     feature_df = feature_df.sort_values("Impact", ascending=False)
 
-    fig = px.bar(feature_df, x="Impact", y="Feature", orientation="h", title="📊 Feature Impact on Prediction", color="Impact", color_continuous_scale="reds")
+    fig = px.bar(
+        feature_df, x="Impact", y="Feature", 
+        orientation="h", title="📊 Feature Impact on Prediction", 
+        color="Impact", color_continuous_scale="reds"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 # Footer
