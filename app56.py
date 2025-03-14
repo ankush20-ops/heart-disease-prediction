@@ -1,122 +1,130 @@
 import streamlit as st
-import pickle
-import os
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
+import pickle
 import shap
-import plotly.express as px
-from PIL import Image, ImageDraw, ImageFont
+import base64
+from io import BytesIO
 
-# --- Generate Dynamic Banner Image ---
-def generate_banner():
-    img = Image.new("RGB", (900, 200), "#d62828")
-    draw = ImageDraw.Draw(img)
-    draw.text((50, 70), "🫀 Heart Disease Prediction System", fill="white", 
-              font=None, align="center")
-    img.save("dynamic_banner.png")
+# Load Model & Scaler
+with open("xgboost_heart_disease.pkl", "rb") as f:
+    model = pickle.load(f)
 
-generate_banner()
+with open("scaler.pkl", "rb") as f:
+    scaler = pickle.load(f)
 
-# Fix model path for Streamlit Cloud
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "xgboost_heart_disease.pkl")
+# Streamlit UI
+st.set_page_config(page_title="AI Heart Disease Prediction", layout="wide")
 
-# Load the trained model
-with open(MODEL_PATH, "rb") as file:
-    model = pickle.load(file)
-
-# Set page config
-st.set_page_config(
-    page_title="🫀 Heart Disease Prediction",
-    layout="centered",
-    initial_sidebar_state="expanded"
+# Custom Styling
+st.markdown(
+    """
+    <style>
+    body {background-color: #f8f9fa;}
+    .main {background-color: white; padding: 20px; border-radius: 10px;}
+    h1 {color: #dc3545;}
+    </style>
+    """, unsafe_allow_html=True
 )
 
-# Custom Styling for a Sleek UI
-st.markdown("""
-    <style>
-        .stApp { background-color: #f0f2f6; }
-        h1 { color: #d62828; text-align: center; font-weight: bold; }
-        .stButton>button { background-color: #d62828; color: white; font-size: 18px; border-radius: 10px; }
-        .stAlert { font-size: 18px; }
-        .suggestion-box { background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 5px solid #ffc107; }
-        .success-box { background-color: #d4edda; padding: 15px; border-radius: 8px; border-left: 5px solid #28a745; }
-        .error-box { background-color: #f8d7da; padding: 15px; border-radius: 8px; border-left: 5px solid #dc3545; }
-    </style>
-    """, unsafe_allow_html=True)
+st.title("💖 AI-Powered Heart Disease Prediction")
 
-# Display Heart Health Banner
-st.image("dynamic_banner.png", use_container_width=True)
+# Input Features
+col1, col2 = st.columns(2)
 
-# Title
-st.markdown("<h1>🫀 Heart Disease Prediction</h1>", unsafe_allow_html=True)
+with col1:
+    age = st.slider("Age", 20, 90, 50)
+    gender = st.radio("Gender", ["Male", "Female"])
+    systolic_bp = st.slider("Systolic BP", 80, 200, 120)
+    diastolic_bp = st.slider("Diastolic BP", 50, 130, 80)
+    cholesterol = st.selectbox("Cholesterol Level", sorted(["Normal", "Above Normal", "High"]))
 
-# Input fields
-st.sidebar.header("🔹 Enter Patient Details")
-age = st.sidebar.number_input("Age", 20, 100, 50)
-gender = st.sidebar.selectbox("Gender", [("Male", 1), ("Female", 0)])[1]
-height = st.sidebar.number_input("Height (cm)", 100, 220, 165)
-weight = st.sidebar.number_input("Weight (kg)", 30, 200, 70)
-systolic_bp = st.sidebar.number_input("Systolic Blood Pressure", 90, 200, 120)
-diastolic_bp = st.sidebar.number_input("Diastolic Blood Pressure", 60, 130, 80)
-cholesterol = st.sidebar.selectbox("Cholesterol Level", [("Normal", 1), ("Above Normal", 2), ("High", 3)])[1]
-glucose = st.sidebar.selectbox("Glucose Level", [("Normal", 1), ("Above Normal", 2), ("High", 3)])[1]
-smoker = st.sidebar.selectbox("Smoker?", [("No", 0), ("Yes", 1)])[1]
-alcohol = st.sidebar.selectbox("Alcohol Intake?", [("No", 0), ("Yes", 1)])[1]
-physical_activity = st.sidebar.selectbox("Physical Activity?", [("No", 0), ("Yes", 1)])[1]
+with col2:
+    glucose = st.selectbox("Glucose Level", sorted(["Normal", "Above Normal", "High"]))
+    smoker = st.radio("Do you smoke?", ["No", "Yes"])
+    alcohol = st.radio("Do you consume alcohol?", ["No", "Yes"])
+    physical_activity = st.radio("Are you physically active?", ["No", "Yes"])
+    height = st.slider("Height (cm)", 140, 200, 170)
+    weight = st.slider("Weight (kg)", 40, 150, 70)
 
-# Convert input to NumPy array
-user_input = np.array([[age, gender, height, weight, systolic_bp, diastolic_bp, cholesterol, glucose, smoker, alcohol, physical_activity]])
+# Convert categorical inputs to numeric values
+gender = 1 if gender == "Male" else 0
+cholesterol = {"Normal": 1, "Above Normal": 2, "High": 3}[cholesterol]
+glucose = {"Normal": 1, "Above Normal": 2, "High": 3}[glucose]
+smoker = 1 if smoker == "Yes" else 0
+alcohol = 1 if alcohol == "Yes" else 0
+physical_activity = 1 if physical_activity == "Yes" else 0
 
-# Prediction Logic
-if st.sidebar.button("🔍 Predict"):
-    prediction = model.predict(user_input)[0]
+# Feature Engineering
+bmi = weight / ((height / 100) ** 2)
+bp_ratio = systolic_bp / diastolic_bp
 
-    # Display Result
-    if prediction == 1:
-        st.error("🚨 **High Risk of Heart Disease!**")
-        st.markdown("""<div class='error-box'>
-            <h4>🏥 Suggested Actions:</h4>
-            - 🩺 **Consult a cardiologist immediately.**<br>
-            - 🥗 **Adopt a heart-healthy diet** (less salt, sugar & saturated fats).<br>
-            - 🚶 **Increase physical activity** (e.g., 30 mins of walking daily).<br>
-            - 💊 **Monitor and manage cholesterol & blood pressure.**<br>
-            - 🚭 **Quit smoking & limit alcohol intake.**<br>
-            - 😴 **Ensure proper rest & stress management.**
-        </div>""", unsafe_allow_html=True)
+# Create Feature DataFrame
+input_data = pd.DataFrame([[age, gender, systolic_bp, diastolic_bp, cholesterol, glucose, smoker, alcohol, physical_activity, bmi, bp_ratio]],
+                          columns=["Age", "Gender", "Systolic_BP", "Diastolic_BP", "Cholesterol", "Glucose", "Smoker", "Alcohol", "Physical_Activity", "BMI", "BP_Ratio"])
+
+# Scale Data
+input_data_scaled = scaler.transform(input_data)
+
+# Predict
+prediction = model.predict(input_data_scaled)[0]
+prediction_proba = model.predict_proba(input_data_scaled)[:, 1][0]
+
+# Show Results
+st.subheader("🩺 Prediction Result")
+if prediction == 1:
+    st.error(f"⚠️ High Risk of Heart Disease Detected! (Risk: {prediction_proba:.2%})")
+    disease_name = "Possible Cardiovascular Disease"
+    st.write(f"📝 **Detected Disease:** {disease_name}")
+else:
+    st.success(f"✅ No Immediate Heart Disease Risk Detected! (Risk: {prediction_proba:.2%})")
+
+# SHAP Explanation
+st.subheader("🔍 Model Explainability (SHAP Analysis)")
+explainer = shap.Explainer(model)
+shap_values = explainer(input_data_scaled)
+st.pyplot(shap.plots.waterfall(shap_values[0]))
+
+# PDF Report Generation
+def generate_pdf_report():
+    from fpdf import FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, "Heart Disease Prediction Report", ln=True, align="C")
+
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(200, 10, f"Prediction: {'High Risk' if prediction == 1 else 'Low Risk'}", ln=True)
+    pdf.cell(200, 10, f"Risk Probability: {prediction_proba:.2%}", ln=True)
+
+    pdf.cell(200, 10, "Feature Inputs:", ln=True)
+    for col, val in zip(input_data.columns, input_data.values[0]):
+        pdf.cell(200, 10, f"{col}: {val}", ln=True)
+
+    pdf.output("Heart_Disease_Report.pdf")
+    return "Heart_Disease_Report.pdf"
+
+if st.button("📥 Download Report"):
+    report_path = generate_pdf_report()
+    with open(report_path, "rb") as file:
+        b64 = base64.b64encode(file.read()).decode()
+    href = f'<a href="data:file/pdf;base64,{b64}" download="Heart_Disease_Report.pdf">Click Here to Download Report</a>'
+    st.markdown(href, unsafe_allow_html=True)
+
+# File Upload for Batch Prediction
+st.subheader("📤 Upload Patient Data (CSV/PDF)")
+uploaded_file = st.file_uploader("Upload a patient dataset for automatic predictions", type=["csv", "pdf"])
+
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+        df_scaled = scaler.transform(df)
+        predictions = model.predict(df_scaled)
+        df["Prediction"] = predictions
+        st.write(df)
+        st.download_button("📥 Download Predictions", df.to_csv(index=False), file_name="Predictions.csv", mime="text/csv")
     else:
-        st.success("✅ **No Heart Disease Detected!**")
-        st.markdown("""<div class='success-box'>
-            <h4>💪 Keep Your Heart Healthy:</h4>
-            - 🥦 **Maintain a balanced diet** with plenty of fruits and vegetables.<br>
-            - 🏃 **Exercise regularly** for at least 150 minutes per week.<br>
-            - ❤️ **Get regular check-ups** to monitor heart health.<br>
-            - 🚭 **Avoid smoking & reduce alcohol intake.**<br>
-            - 😃 **Practice stress-relief techniques like meditation.**
-        </div>""", unsafe_allow_html=True)
-
-    # SHAP Explanation
-    explainer = shap.Explainer(model)
-    shap_values = explainer(user_input)
-
-    st.subheader("🔍 Feature Importance Analysis")
-    fig, ax = plt.subplots()
-    shap.waterfall_plot(shap_values[0])
-    st.pyplot(fig)
-
-    # Feature Impact Chart
-    feature_names = ["Age", "Gender", "Height", "Weight", "Systolic BP", "Diastolic BP", "Cholesterol", "Glucose", "Smoker", "Alcohol", "Physical Activity"]
-    shap_values_array = np.abs(shap_values.values[0])
-    
-    feature_df = pd.DataFrame({"Feature": feature_names, "Impact": shap_values_array})
-    feature_df = feature_df.sort_values("Impact", ascending=False)
-
-    fig = px.bar(
-        feature_df, x="Impact", y="Feature", 
-        orientation="h", title="📊 Feature Impact on Prediction", 
-        color="Impact", color_continuous_scale="reds"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        st.warning("PDF Processing Coming Soon!")
 
 # Footer
-st.markdown("<br><hr><center>👨‍⚕️ AI-Powered Heart Health Prediction | Built with ❤️ by Ankush</center>", unsafe_allow_html=True)
+st.markdown("Developed by **Ankush** with ❤️")
